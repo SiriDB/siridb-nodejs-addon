@@ -30,3 +30,14 @@
 *.exe
 *.out
 *.app
+
+# Eclipse
+.cproject
+.project
+.settings/
+
+# Node.js
+node_modules/
+
+# Compile
+build/

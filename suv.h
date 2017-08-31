@@ -9,8 +9,8 @@
 #define SUV_H_
 
 #include <stdlib.h>
-#include <libsiridb/siridb.h>
 #include <uv.h>
+#include <libsiridb/siridb.h>
 
 /* type definitions */
 typedef struct suv_buf_s suv_buf_t;
@@ -23,6 +23,8 @@ typedef struct suv_write_s suv_insert_t;
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+typedef void (*suv_cb) (void * buf_data, const char * msg);
 
 suv_buf_t * suv_buf_create(siridb_t * siridb);
 void suv_buf_destroy(suv_buf_t * suvbf);
@@ -37,10 +39,11 @@ suv_connect_t * suv_connect_create(
     const char * dbname);
 void suv_connect_destroy(suv_connect_t * connect);
 void suv_connect(
+    uv_loop_t * loop,
     suv_connect_t * connect,
     suv_buf_t * buf,
-    uv_tcp_t * tcp,
     struct sockaddr * addr);
+void suv_close(suv_buf_t * buf, const char * msg);
 
 suv_query_t * suv_query_create(siridb_req_t * req, const char * query);
 void suv_query_destroy(suv_query_t * suvq);
@@ -53,6 +56,7 @@ suv_insert_t * suv_insert_create(
 void suv_insert_destroy(suv_insert_t * insert);
 void suv_insert(suv_insert_t * insert);
 const char * suv_strerror(int err_code);
+const char * suv_errproto(uint8_t tp);
 
 #ifdef __cplusplus
 }
@@ -62,10 +66,13 @@ const char * suv_strerror(int err_code);
 struct suv_buf_s
 {
     void * data;            /* public */
+    suv_cb onclose;         /* public */
+    suv_cb onerror;         /* public */
     char * buf;
     size_t len;
     size_t size;
     siridb_t * siridb;
+    uv_tcp_t * tcp;
 };
 
 struct suv_write_s

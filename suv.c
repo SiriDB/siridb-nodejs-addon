@@ -6,11 +6,11 @@
  */
 
 #include "suv.h"
-#include <stdlib.h>
 #include <string.h>
 #include <assert.h>
 
 static suv_write_t * suv__write_create(void);
+static void suv__close_tcp(uv_handle_t * tcp);
 static void suv__write(suv_write_t * swrite);
 static void suv__alloc_buf(uv_handle_t * handle, size_t sugsz, uv_buf_t * buf);
 static void suv__on_data(uv_stream_t * clnt, ssize_t n, const uv_buf_t * buf);
@@ -31,6 +31,9 @@ suv_buf_t * suv_buf_create(siridb_t * siridb)
         suvbf->len = 0;
         suvbf->size = 0;
         suvbf->buf = NULL;
+        suvbf->onclose = NULL;
+        suvbf->onerror = NULL;
+        suvbf->tcp = NULL;
     }
     return suvbf;
 }
@@ -40,6 +43,10 @@ suv_buf_t * suv_buf_create(siridb_t * siridb)
  */
 void suv_buf_destroy(suv_buf_t * suvbf)
 {
+    if (suvbf->tcp != NULL)
+    {
+        suv_close(suvbf, NULL);
+    }
     free(suvbf->buf);
     free(suvbf);
 }
@@ -82,23 +89,46 @@ void suv_connect_destroy(suv_connect_t * connect)
  * the request object parsed to suv_connect_create() for errors.
  */
 void suv_connect(
+    uv_loop_t * loop,
     suv_connect_t * connect,
     suv_buf_t * buf,
-    uv_tcp_t * tcp,
     struct sockaddr * addr)
 {
     assert (connect->_req->data == connect);  /* bind connect to req->data */
+    assert (buf->tcp == NULL);  /* do not call connect when connected */
 
     uv_connect_t * uvreq = (uv_connect_t *) malloc(sizeof(uv_connect_t));
     if (uvreq == NULL)
     {
         suv_write_error((suv_write_t *) connect, ERR_MEM_ALLOC);
+        return;
     }
-    else
+
+    buf->tcp = (uv_tcp_t *) malloc(sizeof(uv_tcp_t));
+    if (buf->tcp == NULL)
     {
-        tcp->data = (void *) buf;
-        uvreq->data = (void *) connect->_req;
-        uv_tcp_connect(uvreq, tcp, addr, suv__connect_cb);
+        suv_write_error((suv_write_t *) connect, ERR_MEM_ALLOC);
+        return;
+    }
+
+    buf->tcp->data = (void *) buf;
+    buf->siridb->data = (void *) buf->tcp;
+
+    uv_tcp_init(loop, buf->tcp);
+
+    uvreq->data = (void *) connect->_req;
+    uv_tcp_connect(uvreq, buf->tcp, addr, suv__connect_cb);
+}
+
+void suv_close(suv_buf_t * buf, const char * msg)
+{
+    if (!uv_is_closing((uv_handle_t *) buf->tcp))
+    {
+        if (buf->onclose != NULL)
+        {
+            buf->onclose(buf->data, (msg == NULL) ? "connection closed" : msg);
+        }
+        uv_close((uv_handle_t *) buf->tcp, suv__close_tcp);
     }
 }
 
@@ -196,6 +226,19 @@ static suv_write_t * suv__write_create(void)
 }
 
 /*
+ * Close and free handle.
+ */
+static void suv__close_tcp(uv_handle_t * tcp)
+{
+    if (tcp->data != NULL)
+    {
+        suv_buf_t * buf = (suv_buf_t *) tcp->data;
+        buf->tcp = NULL;
+    }
+    free(tcp);
+}
+
+/*
  * Destroy a write object.
  */
 void suv_write_destroy(suv_write_t * swrite)
@@ -224,29 +267,69 @@ const char * suv_strerror(int err_code)
 }
 
 /*
+ * Return JSON compatible text for a given package type.
+ */
+const char * suv_errproto(uint8_t tp)
+{
+    switch (tp)
+    {
+    case CprotoResAuthSuccess:
+        return "{\"success_msg\":\"Successful authentication.\"}";
+    case CprotoResAck:
+        return "{\"success_msg\":\"Acknowledged.\"}";
+    case CprotoAckAdmin:
+        return "{\"success_msg\":\"Acknowledged.\"}";
+    case CprotoAckAdminData:
+        return "{\"success_msg\":\"Acknowledged.\"}";
+    case CprotoErr:
+        return "{\"error_msg\":\"General error.\"}";
+    case CprotoErrNotAuthenticated:
+        return "{\"error_msg\":\"Not authenticated.\"}";
+    case CprotoErrAuthCredentials:
+        return "{\"error_msg\":\"Invalid credentials.\"}";
+    case CprotoErrAuthUnknownDb:
+        return "{\"error_msg\":\"Unknown database.\"}";
+    case CprotoErrLoadingDb:
+        return "{\"error_msg\":\"Loading database.\"}";
+    case CprotoErrFile:
+        return "{\"error_msg\":\"Error returning file.\"}";
+    case CprotoErrAdmin:
+        return "{\"error_msg\":\"General service request error.\"}";
+    case CprotoErrAdminInvalidRequest:
+        return "{\"error_msg\":\"Invalid service request.\"}";
+    default:
+        return "{\"error_msg\":\"Unknown error.\"}";
+    }
+}
+
+/*
  * This function actually send the data.
  */
 static void suv__write(suv_write_t * swrite)
 {
     assert (swrite->_req->data == swrite); /* bind swrite to req->data */
 
-    uv_write_t * uvreq = (uv_write_t *) malloc(sizeof(uv_write_t));
     uv_stream_t * stream = (uv_stream_t *) swrite->_req->siridb->data;
+    if (stream == NULL)
+    {
+        suv_write_error(swrite, ERR_SOCK_WRITE);
+        return;
+    }
 
+    uv_write_t * uvreq = (uv_write_t *) malloc(sizeof(uv_write_t));
     if (uvreq == NULL)
     {
         suv_write_error(swrite, ERR_MEM_ALLOC);
+        return;
     }
-    else
-    {
-        uvreq->data = (void *) swrite->_req;
 
-        uv_buf_t buf = uv_buf_init(
-            (char *) swrite->pkg,
-            sizeof(siridb_pkg_t) + swrite->pkg->len);
+    uvreq->data = (void *) swrite->_req;
 
-        uv_write(uvreq, stream, &buf, 1, suv__write_cb);
-    }
+    uv_buf_t buf = uv_buf_init(
+        (char *) swrite->pkg,
+        sizeof(siridb_pkg_t) + swrite->pkg->len);
+
+    uv_write(uvreq, stream, &buf, 1, suv__write_cb);
 }
 
 static void suv__connect_cb(uv_connect_t * uvreq, int status)
@@ -261,11 +344,6 @@ static void suv__connect_cb(uv_connect_t * uvreq, int status)
     }
     else
     {
-        suv_buf_t * suvbf = (suv_buf_t *) uvreq->handle->data;
-
-        /* bind uv_stream_t * to siridb->data */
-        suvbf->siridb->data = (void *) uvreq->handle;
-
         uv_write_t * uvw = (uv_write_t *) malloc(sizeof(uv_write_t));
         if (uvw == NULL)
         {
@@ -314,13 +392,7 @@ static void suv__on_data(uv_stream_t * clnt, ssize_t n, const uv_buf_t * buf)
 
     if (n < 0)
     {
-        if (n != UV_EOF)
-        {
-            printf("read error: %s\n", uv_err_name(n));
-        }
-        printf("closing...\n");
-        /* cleanup */
-        uv_close((uv_handle_t *) clnt, NULL);
+        suv_close(suvbf, (n != UV_EOF) ? uv_strerror(n) : NULL);
         return;
     }
 
@@ -334,11 +406,7 @@ static void suv__on_data(uv_stream_t * clnt, ssize_t n, const uv_buf_t * buf)
     pkg = (siridb_pkg_t *) suvbf->buf;
     if (!siridb_pkg_check_bit(pkg) || pkg->len > MAX_PKG_SIZE)
     {
-        /* invalid package, close connection */
-        printf("got an invalid package, closing connecition\n");
-
-        // suv_buf_destroy(suvbf);
-        uv_close((uv_handle_t *) clnt, NULL);
+        suv_close(suvbf, "invalid package, connection closed");
         return;
     }
 
@@ -361,7 +429,10 @@ static void suv__on_data(uv_stream_t * clnt, ssize_t n, const uv_buf_t * buf)
 
     if ((rc = siridb_on_pkg(suvbf->siridb, pkg)))
     {
-        printf("error: %s\n", siridb_strerror(rc));
+        if (suvbf->onerror != NULL)
+        {
+            suvbf->onerror(suvbf->data, siridb_strerror(rc));
+        }
     }
 
     suvbf->len -= total_sz;

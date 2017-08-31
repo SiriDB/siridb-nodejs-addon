@@ -27,6 +27,7 @@ using v8::Handle;
 struct Work
 {
     Persistent<Function> cb;
+    SiriDBClient* siridb;
 };
 
 Persistent<Function> SiriDBClient::constructor;
@@ -43,14 +44,19 @@ SiriDBClient::SiriDBClient(
         host_(host),
         port_(port)
 {
-    std::cout << "Init SiriDB Client" << std::endl;
     siridb_ = siridb_create();
     buf_ = (siridb_) ? suv_buf_create(siridb_) : nullptr;
+    if (buf_)
+    {
+        buf_->data = this;
+        buf_->onclose = &OnCloseCb;
+        buf_->onerror = &OnErrorCb;
+    }
 }
 
 SiriDBClient::~SiriDBClient()
 {
-    std::cout << "Destroy SiriDB Client" << std::endl;
+
     if (buf_) suv_buf_destroy(buf_);
     if (siridb_) siridb_destroy(siridb_);
 }
@@ -62,11 +68,14 @@ void SiriDBClient::Init(Local<Object> exports)
     // Prepare constructor template
     Local<FunctionTemplate> tpl = FunctionTemplate::New(isolate, New);
     tpl->SetClassName(String::NewFromUtf8(isolate, "SiriDBClient"));
-    tpl->InstanceTemplate()->SetInternalFieldCount(2);
+    tpl->InstanceTemplate()->SetInternalFieldCount(5);
 
     // Prototype
     NODE_SET_PROTOTYPE_METHOD(tpl, "connect", Connect);
     NODE_SET_PROTOTYPE_METHOD(tpl, "close", Close);
+    NODE_SET_PROTOTYPE_METHOD(tpl, "onClose", SetCloseCb);
+    NODE_SET_PROTOTYPE_METHOD(tpl, "onError", SetErrorCb);
+    NODE_SET_PROTOTYPE_METHOD(tpl, "query", Query);
 
     constructor.Reset(isolate, tpl->GetFunction());
     exports->Set(String::NewFromUtf8(isolate, "SiriDBClient"),
@@ -145,7 +154,6 @@ void SiriDBClient::Connect(const FunctionCallbackInfo<Value>& args)
     Local<Function> cb = Local<Function>::Cast(args[0]);
     Work* work;
     std::bad_alloc allocexc;
-
     int rc;
 
     if (!obj->siridb_ || !obj->buf_)
@@ -167,7 +175,7 @@ void SiriDBClient::Connect(const FunctionCallbackInfo<Value>& args)
 
     siridb_req_t* req = siridb_req_create(obj->siridb_, ConnectCb, NULL);
     if (!req) throw allocexc;
-//
+
     suv_connect_t* conn = suv_connect_create(
             req,
             obj->username_.c_str(),
@@ -177,12 +185,105 @@ void SiriDBClient::Connect(const FunctionCallbackInfo<Value>& args)
 
     work = new Work();
     work->cb.Reset(isolate, cb);
+    work->siridb = obj;
 
     conn->data = work;
     req->data = conn;
 
-    uv_tcp_init(loop, &obj->tcp_);
-    suv_connect(conn, obj->buf_, &obj->tcp_, (struct sockaddr *) &addr);
+    suv_connect(loop, conn, obj->buf_, (struct sockaddr *) &addr);
+
+    args.GetReturnValue().Set(Undefined(isolate));
+}
+
+void SiriDBClient::SetCloseCb(const FunctionCallbackInfo<Value>& args)
+{
+    Isolate* isolate = args.GetIsolate();
+    SiriDBClient* obj = ObjectWrap::Unwrap<SiriDBClient>(args.Holder());
+    Local<Function> cb = Local<Function>::Cast(args[0]);
+
+    obj->onclosecb_.Reset(isolate, cb);
+
+    args.GetReturnValue().Set(Undefined(isolate));
+}
+
+void SiriDBClient::SetErrorCb(const FunctionCallbackInfo<Value>& args)
+{
+    Isolate* isolate = args.GetIsolate();
+    SiriDBClient* obj = ObjectWrap::Unwrap<SiriDBClient>(args.Holder());
+    Local<Function> cb = Local<Function>::Cast(args[0]);
+
+    obj->onerrorcb_.Reset(isolate, cb);
+
+    args.GetReturnValue().Set(Undefined(isolate));
+}
+
+void SiriDBClient::Close(const FunctionCallbackInfo<Value>& args)
+{
+    Isolate* isolate = args.GetIsolate();
+    SiriDBClient* obj = ObjectWrap::Unwrap<SiriDBClient>(args.Holder());
+
+    suv_close(obj->buf_, NULL);
+
+    args.GetReturnValue().Set(Undefined(isolate));
+}
+
+void SiriDBClient::Query(const FunctionCallbackInfo<Value>& args)
+{
+    Isolate* isolate = args.GetIsolate();
+    SiriDBClient* obj = ObjectWrap::Unwrap<SiriDBClient>(args.Holder());
+    Local<Function> cb;
+    Work* work;
+    std::bad_alloc allocexc;
+
+    if (!obj->siridb_ || !obj->buf_)
+    {
+        isolate->ThrowException(Exception::TypeError(
+                String::NewFromUtf8(isolate, "SiriDB uninitialized")));
+        return;
+    }
+
+    if (args.Length() < 2)
+    {
+        isolate->ThrowException(Exception::TypeError(
+                String::NewFromUtf8(
+                        isolate, "Wrong number of arguments")));
+        return;
+    }
+
+    if (!args[0]->IsString() || !args[1]->IsFunction())
+    {
+        isolate->ThrowException(Exception::TypeError(
+                String::NewFromUtf8(
+                        isolate, "Wrong arguments")));
+        return;
+    }
+
+    String::Utf8Value str(args[0]->ToString());
+    if (!*str)
+    {
+        isolate->ThrowException(Exception::TypeError(
+                String::NewFromUtf8(
+                        isolate, "Cannot convert string")));
+        return;
+    }
+
+    siridb_req_t * req = siridb_req_create(obj->siridb_, QueryCb, NULL);
+    if (!req) throw allocexc;
+
+    suv_query_t * suvquery = suv_query_create(req, std::string(*str).c_str());
+    if (!suvquery) throw allocexc;
+
+    cb = Local<Function>::Cast(args[1]);
+
+    work = new Work();
+    work->cb.Reset(isolate, cb);
+    work->siridb = obj;
+
+    suvquery->data = work;
+    req->data = suvquery;
+
+    suv_query(suvquery);
+
 
     args.GetReturnValue().Set(Undefined(isolate));
 }
@@ -200,16 +301,32 @@ void SiriDBClient::ConnectCb(siridb_req_t * req)
 
         if (req->status)
         {
-            Local<String> val = String::NewFromUtf8(isolate,
+            argv[0] = String::NewFromUtf8(isolate,
                     ("Connect or authentication failed: " +
                             std::string(suv_strerror(req->status)))
                             .c_str());
-            argv[0] = val;
         }
         else
         {
-            argv[0] = Undefined(isolate);
+            switch (req->pkg->tp)
+            {
+            case CprotoErrAuthCredentials:
+                argv[0] = String::NewFromUtf8(isolate, "Invalid credentials");
+                suv_close(work->siridb->buf_, NULL);
+                break;
+            case CprotoErrAuthUnknownDb:
+                argv[0] = String::NewFromUtf8(isolate, "Unknown database");
+                suv_close(work->siridb->buf_, NULL);
+                break;
+            case CprotoResAuthSuccess:
+                argv[0] = Null(isolate);
+                break;
+            default:
+                argv[0] = String::NewFromUtf8(isolate, "Unexpected error");
+                suv_close(work->siridb->buf_, NULL);
+            }
         }
+
         Local<Function>::New(isolate, work->cb)->
               Call(isolate->GetCurrentContext()->Global(), 1, argv);
 
@@ -226,19 +343,82 @@ void SiriDBClient::ConnectCb(siridb_req_t * req)
     siridb_req_destroy(req);
 }
 
-void SiriDBClient::Close(const FunctionCallbackInfo<Value>& args)
+void SiriDBClient::QueryCb(siridb_req_t * req)
 {
-    Isolate* isolate = args.GetIsolate();
-    SiriDBClient* obj = ObjectWrap::Unwrap<SiriDBClient>(args.Holder());
+    Isolate* isolate = Isolate::GetCurrent();
+    v8::HandleScope handleScope(isolate);
 
-    if (!uv_is_closing((uv_handle_t *) &obj->tcp_))
+    suv_query_t* suvquery = (suv_query_t*) req->data;
+    Work* work = static_cast<Work*>(suvquery->data);
+    Handle<Value> argv[2];
+
+    if (req->status != 0)
     {
-        uv_close((uv_handle_t *) &obj->tcp_, NULL);
+        argv[0] = String::NewFromUtf8(isolate,
+                ("{\"error_msg\":\"Unable to handle request: " +
+                        std::string(suv_strerror(req->status)) + "\"}").c_str());
+        argv[1] = Number::New(isolate, -CprotoErrMsg);
     }
-    //    Local<String> val = String::NewFromUtf8(isolate, (obj->username_ + obj->password_).c_str());
-    //    Local<Boolean> retval = Boolean::New(isolate, true);
+    else
+    {
+        qp_unpacker_t unpacker;
+        qp_unpacker_init(&unpacker, req->pkg->data, req->pkg->len);
+        char * json = qp_unpacker_sprint((&unpacker));
+        if (json)
+        {
+            argv[0] = String::NewFromUtf8(isolate, json);
+            free(json);
+        }
+        else
+        {
+            argv[0] = String::NewFromUtf8(isolate, suv_errproto(req->pkg->tp));
+        }
+        argv[1] = Number::New(isolate, (req->pkg->tp == CprotoReqQuery) ? 0 : -req->pkg->tp);
+    }
 
-    args.GetReturnValue().Set(Undefined(isolate));
+    Local<Function>::New(isolate, work->cb)->
+          Call(isolate->GetCurrentContext()->Global(), 2, argv);
+
+    work->cb.Reset();
+
+    /* cleanup work */
+    delete work;
+
+    /* cleanup query */
+    suv_query_destroy(suvquery);
+
+    /* cleanup connection request */
+    siridb_req_destroy(req);
+}
+
+void SiriDBClient::OnCloseCb(void * buf_data, const char * msg)
+{
+    SiriDBClient* obj = static_cast<SiriDBClient*>(buf_data);
+
+    if (!obj->onclosecb_.IsEmpty())
+    {
+        Isolate * isolate = Isolate::GetCurrent();
+        v8::HandleScope handleScope(isolate);
+        Handle<Value> argv[] = { String::NewFromUtf8(isolate, msg) };
+        Local<Function>::New(isolate, obj->onclosecb_)->
+              Call(isolate->GetCurrentContext()->Global(), 1, argv);
+
+    }
+}
+
+void SiriDBClient::OnErrorCb(void * buf_data, const char * msg)
+{
+    SiriDBClient* obj = static_cast<SiriDBClient*>(buf_data);
+
+    if (!obj->onerrorcb_.IsEmpty())
+    {
+        Isolate * isolate = Isolate::GetCurrent();
+        v8::HandleScope handleScope(isolate);
+        Handle<Value> argv[] = { String::NewFromUtf8(isolate, msg) };
+        Local<Function>::New(isolate, obj->onerrorcb_)->
+              Call(isolate->GetCurrentContext()->Global(), 1, argv);
+
+    }
 }
 
 }  // namespace siridb

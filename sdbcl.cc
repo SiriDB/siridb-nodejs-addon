@@ -2,8 +2,9 @@
 #include <iostream>
 #include <string.h>
 #include <stdlib.h>
-#include "sdbcl.h"
 #include <vector>
+#include "sdbcl.h"
+#include "v8qpack.h"
 
 namespace siridb
 {
@@ -23,6 +24,9 @@ using v8::String;
 using v8::Value;
 using v8::Exception;
 using v8::Handle;
+using v8::Array;
+using v8qpack::Pack;
+using v8qpack::Unpack;
 
 struct Work
 {
@@ -56,7 +60,6 @@ SiriDBClient::SiriDBClient(
 
 SiriDBClient::~SiriDBClient()
 {
-
     if (buf_) suv_buf_destroy(buf_);
     if (siridb_) siridb_destroy(siridb_);
 }
@@ -149,8 +152,8 @@ void SiriDBClient::Connect(const FunctionCallbackInfo<Value>& args)
 {
     struct sockaddr_in addr;
     Isolate* isolate = args.GetIsolate();
-    SiriDBClient* obj = ObjectWrap::Unwrap<SiriDBClient>(args.Holder());
-    uv_loop_t* loop = uv_default_loop();
+    SiriDBClient * obj = ObjectWrap::Unwrap<SiriDBClient>(args.Holder());
+    uv_loop_t * loop = uv_default_loop();
     Local<Function> cb = Local<Function>::Cast(args[0]);
     Work* work;
     std::bad_alloc allocexc;
@@ -173,10 +176,10 @@ void SiriDBClient::Connect(const FunctionCallbackInfo<Value>& args)
                         std::string(uv_strerror(rc))).c_str())));
     }
 
-    siridb_req_t* req = siridb_req_create(obj->siridb_, ConnectCb, NULL);
+    siridb_req_t * req = siridb_req_create(obj->siridb_, ConnectCb, NULL);
     if (!req) throw allocexc;
 
-    suv_connect_t* conn = suv_connect_create(
+    suv_connect_t * conn = suv_connect_create(
             req,
             obj->username_.c_str(),
             obj->password_.c_str(),
@@ -284,7 +287,6 @@ void SiriDBClient::Query(const FunctionCallbackInfo<Value>& args)
 
     suv_query(suvquery);
 
-
     args.GetReturnValue().Set(Undefined(isolate));
 }
 
@@ -293,7 +295,7 @@ void SiriDBClient::ConnectCb(siridb_req_t * req)
     Isolate * isolate = Isolate::GetCurrent();
     v8::HandleScope handleScope(isolate);
 
-    suv_connect_t* conn = (suv_connect_t*) req->data;
+    suv_connect_t * conn = (suv_connect_t *) req->data;
     if (conn)
     {
         Work* work = static_cast<Work*>(conn->data);
@@ -343,37 +345,112 @@ void SiriDBClient::ConnectCb(siridb_req_t * req)
     siridb_req_destroy(req);
 }
 
+
+
+
+/*
+ * Return JSON compatible text for a given package type.
+ */
+const char * suv_errproto(uint8_t tp)
+{
+    switch (tp)
+    {
+    case CprotoResAuthSuccess:
+        return "{\"success_msg\":\"Successful authentication.\"}";
+    case CprotoResAck:
+        return "{\"success_msg\":\"Acknowledged.\"}";
+    case CprotoAckAdmin:
+        return "{\"success_msg\":\"Acknowledged.\"}";
+    case CprotoAckAdminData:
+        return "{\"success_msg\":\"Acknowledged.\"}";
+    case CprotoErr:
+        return "{\"error_msg\":\"General error.\"}";
+    case CprotoErrNotAuthenticated:
+        return "{\"error_msg\":\"Not authenticated.\"}";
+    case CprotoErrAuthCredentials:
+        return "{\"error_msg\":\"Invalid credentials.\"}";
+    case CprotoErrAuthUnknownDb:
+        return "{\"error_msg\":\"Unknown database.\"}";
+    case CprotoErrLoadingDb:
+        return "{\"error_msg\":\"Loading database.\"}";
+    case CprotoErrFile:
+        return "{\"error_msg\":\"Error returning file.\"}";
+    case CprotoErrAdmin:
+        return "{\"error_msg\":\"General service request error.\"}";
+    case CprotoErrAdminInvalidRequest:
+        return "{\"error_msg\":\"Invalid service request.\"}";
+    default:
+        return "{\"error_msg\":\"Unknown error.\"}";
+    }
+}
+
+Local<Object> SiriDBClient::BuildErr(Isolate * isolate, std::string err)
+{
+    Local<Object> obj = Object::New(isolate);
+    Local<String> key = String::NewFromUtf8(isolate, "error_msg");
+    Local<String> val = String::NewFromUtf8(isolate, err.c_str());
+    obj->Set(key, val);
+    return obj;
+}
+
+std::string SiriDBClient::GetMsg(uint8_t tp)
+{
+    switch (tp)
+    {
+    case CprotoResAuthSuccess:
+        return "Successful authenticated.";
+    case CprotoResAck:
+        return "Acknowledge received.";
+    case CprotoErr:
+        return "General exception in SiriDB occurred.";
+    case CprotoErrNotAuthenticated:
+        return "Connection is not authenticated.";
+    case CprotoErrAuthCredentials:
+        return "Invalid credential.";
+    case CprotoErrAuthUnknownDb:
+        return "Unknown database";
+    case CprotoErrLoadingDb:
+        return "Database is loading.";
+    default:
+        return "Unpacking response has failed.";
+    }
+}
+
 void SiriDBClient::QueryCb(siridb_req_t * req)
 {
-    Isolate* isolate = Isolate::GetCurrent();
+    Isolate * isolate = Isolate::GetCurrent();
     v8::HandleScope handleScope(isolate);
 
-    suv_query_t* suvquery = (suv_query_t*) req->data;
+    suv_query_t * suvquery = (suv_query_t *) req->data;
     Work* work = static_cast<Work*>(suvquery->data);
     Handle<Value> argv[2];
 
     if (req->status != 0)
     {
-        argv[0] = String::NewFromUtf8(isolate,
-                ("{\"error_msg\":\"Unable to handle request: " +
-                        std::string(suv_strerror(req->status)) + "\"}").c_str());
+        argv[0] = SiriDBClient::BuildErr(
+                isolate,
+                "Unable to handle request: " +
+                std::string(suv_strerror(req->status)));
         argv[1] = Number::New(isolate, -CprotoErrMsg);
     }
     else
     {
-        qp_unpacker_t unpacker;
-        qp_unpacker_init(&unpacker, req->pkg->data, req->pkg->len);
-        char * json = qp_unpacker_sprint((&unpacker));
-        if (json)
+        try
         {
-            argv[0] = String::NewFromUtf8(isolate, json);
-            free(json);
+            argv[0] = Unpack(isolate, req->pkg->data, req->pkg->len);
+            argv[1] = Number::New(isolate,
+                    (req->pkg->tp == CprotoReqQuery) ? 0 : -req->pkg->tp);
         }
-        else
+        catch (...)
         {
-            argv[0] = String::NewFromUtf8(isolate, suv_errproto(req->pkg->tp));
+            argv[0] = SiriDBClient::BuildErr(
+                    isolate,
+                    SiriDBClient::GetMsg(req->pkg->tp));
+            argv[1] = Number::New(isolate,
+                    (req->pkg->tp == CprotoReqQuery) ?
+                            -CprotoErrMsg : -req->pkg->tp);
         }
-        argv[1] = Number::New(isolate, (req->pkg->tp == CprotoReqQuery) ? 0 : -req->pkg->tp);
+
     }
 
     Local<Function>::New(isolate, work->cb)->
@@ -393,7 +470,7 @@ void SiriDBClient::QueryCb(siridb_req_t * req)
 
 void SiriDBClient::OnCloseCb(void * buf_data, const char * msg)
 {
-    SiriDBClient* obj = static_cast<SiriDBClient*>(buf_data);
+    SiriDBClient * obj = static_cast<SiriDBClient *>(buf_data);
 
     if (!obj->onclosecb_.IsEmpty())
     {
@@ -408,7 +485,7 @@ void SiriDBClient::OnCloseCb(void * buf_data, const char * msg)
 
 void SiriDBClient::OnErrorCb(void * buf_data, const char * msg)
 {
-    SiriDBClient* obj = static_cast<SiriDBClient*>(buf_data);
+    SiriDBClient * obj = static_cast<SiriDBClient *>(buf_data);
 
     if (!obj->onerrorcb_.IsEmpty())
     {

@@ -5,16 +5,19 @@
       "sources": [
         "addon.cc",
         "sdbcl.cc",
-        "suv.c"
+        "v8qpack.cc"
       ],
       "link_settings": {
         "libraries": [
-          "-lsiridb"
+          "-lsiridb",
+          "-lqpack",
+          "-lsuv",
+          "-luv"
         ]
       },
       "cflags_cc": [
         "-fexceptions"
-      ]      
+      ]
     }
   ]
   

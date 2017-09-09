@@ -79,6 +79,7 @@ void SiriDBClient::Init(Local<Object> exports)
     NODE_SET_PROTOTYPE_METHOD(tpl, "onClose", SetCloseCb);
     NODE_SET_PROTOTYPE_METHOD(tpl, "onError", SetErrorCb);
     NODE_SET_PROTOTYPE_METHOD(tpl, "query", Query);
+    NODE_SET_PROTOTYPE_METHOD(tpl, "insert", Insert);
 
     constructor.Reset(isolate, tpl->GetFunction());
     exports->Set(String::NewFromUtf8(isolate, "SiriDBClient"),
@@ -259,6 +260,97 @@ void SiriDBClient::Query(const FunctionCallbackInfo<Value>& args)
                 String::NewFromUtf8(
                         isolate, "Wrong arguments")));
         return;
+    }
+
+    String::Utf8Value str(args[0]->ToString());
+    if (!*str)
+    {
+        isolate->ThrowException(Exception::TypeError(
+                String::NewFromUtf8(
+                        isolate, "Cannot convert string")));
+        return;
+    }
+
+    siridb_req_t * req = siridb_req_create(obj->siridb_, QueryCb, NULL);
+    if (!req) throw allocexc;
+
+    suv_query_t * suvquery = suv_query_create(req, std::string(*str).c_str());
+    if (!suvquery) throw allocexc;
+
+    cb = Local<Function>::Cast(args[1]);
+
+    work = new Work();
+    work->cb.Reset(isolate, cb);
+    work->siridb = obj;
+
+    suvquery->data = work;
+    req->data = suvquery;
+
+    suv_query(suvquery);
+
+    args.GetReturnValue().Set(Undefined(isolate));
+}
+
+void SiriDBClient::Insert(const FunctionCallbackInfo<Value>& args)
+{
+    Isolate* isolate = args.GetIsolate();
+    SiriDBClient* obj = ObjectWrap::Unwrap<SiriDBClient>(args.Holder());
+    Local<Function> cb;
+    Work* work;
+    std::bad_alloc allocexc;
+
+    if (!obj->siridb_ || !obj->buf_)
+    {
+        isolate->ThrowException(Exception::TypeError(
+                String::NewFromUtf8(isolate, "SiriDB uninitialized")));
+        return;
+    }
+
+    if (args.Length() < 2)
+    {
+        isolate->ThrowException(Exception::TypeError(
+                String::NewFromUtf8(
+                        isolate, "Wrong number of arguments")));
+        return;
+    }
+
+    if (!args[0]->IsArray() || !args[1]->IsFunction())
+    {
+        isolate->ThrowException(Exception::TypeError(
+                String::NewFromUtf8(
+                        isolate, "Wrong arguments")));
+        return;
+    }
+
+    const char * typErr =
+            "First argument should be an array with object like this:\n"
+            "{\n   "
+            "    type: 'integer', // or float\n"
+            "    name: 'my series name',\n"
+            "    points: [[time-stamp, value], ...]\n"
+            "}";
+    std::vector<siridb_series_t *> series;
+    Local<Array> arr = Local<Array>::Cast(args[0]);
+    uint32_t len = arr->Length();
+    Local<Value> val;
+    for(uint32_t i = 0; i < len; i++)
+    {
+        val = arr->Get(i);
+        if (!val->IsObject())
+        {
+            isolate->ThrowException(Exception::TypeError(
+                    String::NewFromUtf8(isolate, typErr)));
+        }
+        Local<Object> obj = val->ToObject();
+
+        Local<Value> name_key= String::NewFromUtf8(isolate, "name");
+        Local<Value> type_key= String::NewFromUtf8(isolate, "type");
+        Local<Value> points_key= String::NewFromUtf8(isolate, "points");
+
+        Local<Value> name = obj->Get(name_key);
+        Local<Value> type = obj->Get(type_key);
+        Local<Value> points = obj->Get(points_key);
+
     }
 
     String::Utf8Value str(args[0]->ToString());

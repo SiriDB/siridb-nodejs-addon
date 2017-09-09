@@ -17,5 +17,14 @@ siridb.connect((err) => {
                         
             siridb.close();
         });
+        siridb.insert([
+            {
+                name: 'my series'
+            }], (resp, status) => {
+            console.log('Status: ', status);
+            console.log(resp);
+                        
+            siridb.close();
+        });        
     }
 });

@@ -5,9 +5,13 @@ Node.js add-on (C++) for SiriDB
 
 
 ### Error Codes
+When an error has occurred the `error_msg` in the response contains details about the error.
+Sometimes its useful to act on a specific error, for example you might want to retry the request in case of `ERR_SERVER` while a
+`ERR_INSERT` error indicates something is wrong with the data.
+
 The following error codes can be returned:
 
-- `sdbaddon.ERR_MSG` (-64) *General error code. Check the `error_msg` in the response for more details*
+- `sdbaddon.ERR_MSG` (-64) *General error code*
 - `sdbaddon.ERR_QUERY` (-65) *Most likely a syntax error in the query*
 - `sdbaddon.ERR_INSERT` (-66) *Most likely the data is invalid or corrupt*
 - `sdbaddon.ERR_SERVER` (-67) *The server could not perform the request, you could try another SiriDB server*

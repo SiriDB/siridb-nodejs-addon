@@ -12,23 +12,32 @@ siridb.connect((err) => {
         console.error("Connection error: ", err);
     } else {
         siridb.query("select * from 'aggr'", (resp, status) => {
-            console.log('Status: ', status);
+            console.log('Query Status: ', status);
             console.log(resp);
-                        
-        });
-        siridb.insert([
-            {
-                type: 'integer',
-                name: 'my series',
+
+            siridb.insert([{
+                type: 'float',
+                name: 'some float series',
                 points: [
-                    [3000, 5.4],
-                    [4000, 7.1]
+                    [1505118253, 5.4],
+                    [1505118307, 7.1]
+                ]
+            }, {
+                type: 'integer',
+                name: 'some integer series',
+                points: [
+                    [1505118253, 5],
+                    [1505118307, 7]
                 ]
             }], (resp, status) => {
-            console.log('Status: ', status);
-            console.log(resp);
-                        
-            siridb.close();
-        });        
+                console.log('Insert Status: ', status);
+                console.log(resp);
+
+                /* close connection */
+                siridb.close();
+            });     
+        });
+
+   
     }
 });

@@ -1,7 +1,7 @@
 {
   "targets": [
     {
-      "target_name": "addon",
+      "target_name": "siridb",
       "sources": [
         "addon.cc",
         "sdbcl.cc",
@@ -20,5 +20,5 @@
       ]
     }
   ]
-  
+
 }

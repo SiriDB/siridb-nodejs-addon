@@ -12,6 +12,6 @@ void InitAll(Local<Object> exports) {
   SiriDBClient::Init(exports);
 }
 
-NODE_MODULE(addon, InitAll)
+NODE_MODULE(siridb, InitAll)
 
 }  // namespace siridb

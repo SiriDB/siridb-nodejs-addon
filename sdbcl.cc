@@ -84,6 +84,42 @@ void SiriDBClient::Init(Local<Object> exports)
     constructor.Reset(isolate, tpl->GetFunction());
     exports->Set(String::NewFromUtf8(isolate, "SiriDBClient"),
                tpl->GetFunction());
+
+    Local<Context> context = isolate->GetCurrentContext();
+
+    exports->DefineOwnProperty(context,
+        String::NewFromUtf8(isolate, "ERR_MSG"),
+        Number::New(isolate, -64), v8::ReadOnly);
+    exports->DefineOwnProperty(context,
+        String::NewFromUtf8(isolate, "ERR_QUERY"),
+        Number::New(isolate, -65), v8::ReadOnly);
+    exports->DefineOwnProperty(context,
+        String::NewFromUtf8(isolate, "ERR_INSERT"),
+        Number::New(isolate, -66), v8::ReadOnly);
+    exports->DefineOwnProperty(context,
+        String::NewFromUtf8(isolate, "ERR_SERVER"),
+        Number::New(isolate, -67), v8::ReadOnly);
+    exports->DefineOwnProperty(context,
+        String::NewFromUtf8(isolate, "ERR_POOL"),
+        Number::New(isolate, -68), v8::ReadOnly);
+    exports->DefineOwnProperty(context,
+        String::NewFromUtf8(isolate, "ERR_ACCESS"),
+        Number::New(isolate, -69), v8::ReadOnly);
+    exports->DefineOwnProperty(context,
+        String::NewFromUtf8(isolate, "ERR_RUNTIME"),
+        Number::New(isolate, -70), v8::ReadOnly);
+    exports->DefineOwnProperty(context,
+        String::NewFromUtf8(isolate, "ERR_NOT_AUTHENTICATED"),
+        Number::New(isolate, -71), v8::ReadOnly);
+    exports->DefineOwnProperty(context,
+        String::NewFromUtf8(isolate, "ERR_CREDENTIALS"),
+        Number::New(isolate, -72), v8::ReadOnly);
+    exports->DefineOwnProperty(context,
+        String::NewFromUtf8(isolate, "ERR_UNKNOWN_DB"),
+        Number::New(isolate, -73), v8::ReadOnly);
+    exports->DefineOwnProperty(context,
+        String::NewFromUtf8(isolate, "ERR_LOADING_DB"),
+        Number::New(isolate, -74), v8::ReadOnly);
 }
 
 void SiriDBClient::New(const FunctionCallbackInfo<Value>& args)
@@ -136,6 +172,7 @@ void SiriDBClient::New(const FunctionCallbackInfo<Value>& args)
     {
         SiriDBClient* obj = new SiriDBClient(v[0], v[1], v[2], v[3], port);
         obj->Wrap(args.This());
+
         args.GetReturnValue().Set(args.This());
     }
     else

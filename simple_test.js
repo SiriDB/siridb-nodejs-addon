@@ -1,7 +1,7 @@
 // simple_test.js
-const addon = require('./build/Release/addon');
+const sdbaddon = require('./build/Release/siridb');
 
-var siridb = new addon.SiriDBClient("iris", "siri", "dbtest", "127.0.0.1", 9000);
+var siridb = new sdbaddon.SiriDBClient("iris", "siri", "dbtest", "127.0.0.1", 9000);
 
 siridb.onClose((msg) => {
     console.log(msg);
@@ -35,9 +35,11 @@ siridb.connect((err) => {
 
                 /* close connection */
                 siridb.close();
-            });     
+            });
         });
 
-   
+
     }
 });
+
+console.log(sdbaddon);

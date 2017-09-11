@@ -7,13 +7,14 @@ var connect = function(siridb, cb) {
     console.log("Trying to connect...")     
     siridb.connect((err) => {
 
-        if (err === null) {
+        if (!err) {
             console.log("Successful connected!");
             if (cb) {
                 cb();
             }
             return;          
-        } 
+        }
+
         console.error(err);
         retry(siridb);
     });
@@ -34,13 +35,10 @@ var test = function() {
     siridb.retry = true;
     connect(siridb, () => {
         siridb.query("show", function (resp, err) {
-            if (resp !== null) {
-                data = JSON.parse(resp);
-                console.log(data);
-            }
-            if (err !== null) {
+            if (err) {
                 console.error("error: ", err);
             }
+            console.log(resp);
         });
     });
 
@@ -55,7 +53,7 @@ var test = function() {
     //     console.error(errmsg);
     // });
         
-    sleep.sleep(20000, function(){
+    sleep.sleep(10000, function(){
         console.log('Finished...');
         siridb.retry = false;
         siridb.close();
@@ -65,7 +63,6 @@ var test = function() {
 }
  
 test()
-
 
 if (global.gc !== undefined) {
     global.gc();

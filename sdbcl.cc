@@ -329,10 +329,27 @@ void SiriDBClient::Insert(const FunctionCallbackInfo<Value>& args)
             "    name: 'my series name',\n"
             "    points: [[time-stamp, value], ...]\n"
             "}";
+
     std::vector<siridb_series_t *> series;
     Local<Array> arr = Local<Array>::Cast(args[0]);
     uint32_t len = arr->Length();
+    uint32_t npoints;
     Local<Value> val;
+    Local<Object> series_obj;
+    Local<Value> type_key;
+    Local<Value> points_key;
+    Local<Value> name_key;
+    Local<Value> name;
+    Local<Value> type;
+    Local<Value> points;
+    Local<Array> points_arr;
+    siridb_series_t * s;
+    Local<Array> point;
+    Local<Value> ts;
+    Local<Value> value;
+    siridb_point_t * pnt;
+    double ts_d, value_d;
+
     for(uint32_t i = 0; i < len; i++)
     {
         val = arr->Get(i);
@@ -341,32 +358,107 @@ void SiriDBClient::Insert(const FunctionCallbackInfo<Value>& args)
             isolate->ThrowException(Exception::TypeError(
                     String::NewFromUtf8(isolate, typErr)));
         }
-        Local<Object> obj = val->ToObject();
+        series_obj = val->ToObject();
 
-        Local<Value> name_key= String::NewFromUtf8(isolate, "name");
-        Local<Value> type_key= String::NewFromUtf8(isolate, "type");
-        Local<Value> points_key= String::NewFromUtf8(isolate, "points");
+        name_key= String::NewFromUtf8(isolate, "name");
+        type_key= String::NewFromUtf8(isolate, "type");
+        points_key= String::NewFromUtf8(isolate, "points");
 
-        Local<Value> name = obj->Get(name_key);
-        Local<Value> type = obj->Get(type_key);
-        Local<Value> points = obj->Get(points_key);
+        name = series_obj->Get(name_key);
+        type = series_obj->Get(type_key);
+        points = series_obj->Get(points_key);
 
+        if (!name->IsString() || !type->IsString() || !points->IsArray())
+        {
+            isolate->ThrowException(Exception::TypeError(
+                    String::NewFromUtf8(isolate, typErr)));
+        }
+
+        String::Utf8Value name_str(name->ToString());
+        String::Utf8Value type_str(type->ToString());
+        if (!*name_str || !*type_str)
+        {
+            isolate->ThrowException(Exception::TypeError(
+                    String::NewFromUtf8(
+                            isolate, "Cannot convert string")));
+            return;
+        }
+
+        enum siridb_series_e tp;
+        if (!strcmp(std::string(*type_str).c_str(), "integer"))
+        {
+            tp = SIRIDB_SERIES_TP_INT64;
+        }
+        else if (!strcmp(std::string(*type_str).c_str(), "float"))
+        {
+            tp = SIRIDB_SERIES_TP_REAL;
+        }
+        else
+        {
+            isolate->ThrowException(Exception::TypeError(
+                    String::NewFromUtf8(isolate, typErr)));
+            return;
+        }
+
+        points_arr = Local<Array>::Cast(points);
+        npoints = points_arr->Length();
+        s = siridb_series_create(tp, std::string(*name_str).c_str(), npoints);
+        if (!s) throw allocexc;
+
+        for(uint32_t j = 0; j < npoints; j++)
+        {
+            val = points_arr->Get(j);
+            pnt = s->points + j;
+
+            if (!val->IsArray())
+            {
+                isolate->ThrowException(Exception::TypeError(
+                        String::NewFromUtf8(isolate, typErr)));
+                return;
+            }
+
+            point = Local<Array>::Cast(val);
+
+            if (point->Length() != 2)
+            {
+                isolate->ThrowException(Exception::TypeError(
+                        String::NewFromUtf8(isolate, typErr)));
+                return;
+            }
+
+            ts = point->Get(0);
+            value = point->Get(1);
+
+            if (!ts->IsNumber() || !value->IsNumber())
+            {
+                isolate->ThrowException(Exception::TypeError(
+                        String::NewFromUtf8(isolate, typErr)));
+                return;
+            }
+
+            ts_d = ts->NumberValue();
+            pnt->ts = (uint64_t) ts_d;
+
+            value_d = value->NumberValue();
+            switch (tp)
+            {
+            case SIRIDB_SERIES_TP_INT64:
+                pnt->via.int64 = (int64_t) value_d; break;
+            case SIRIDB_SERIES_TP_REAL:
+                pnt->via.real = value_d; break;
+            case SIRIDB_SERIES_TP_STR:
+                pnt->via.str = nullptr; break;
+            }
+        }
+        series.push_back(s);
     }
 
-    String::Utf8Value str(args[0]->ToString());
-    if (!*str)
-    {
-        isolate->ThrowException(Exception::TypeError(
-                String::NewFromUtf8(
-                        isolate, "Cannot convert string")));
-        return;
-    }
-
-    siridb_req_t * req = siridb_req_create(obj->siridb_, QueryCb, NULL);
+    siridb_req_t * req = siridb_req_create(obj->siridb_, InsertCb, NULL);
     if (!req) throw allocexc;
 
-    suv_query_t * suvquery = suv_query_create(req, std::string(*str).c_str());
-    if (!suvquery) throw allocexc;
+    std::vector<siridb_series_t *>::iterator it = series.begin();
+    suv_insert_t * suvi = suv_insert_create(req, &series[0], series.size());
+    if (!suvi) throw allocexc;
 
     cb = Local<Function>::Cast(args[1]);
 
@@ -374,10 +466,10 @@ void SiriDBClient::Insert(const FunctionCallbackInfo<Value>& args)
     work->cb.Reset(isolate, cb);
     work->siridb = obj;
 
-    suvquery->data = work;
-    req->data = suvquery;
+    suvi->data = work;
+    req->data = suvi;
 
-    suv_query(suvquery);
+    suv_insert(suvi);
 
     args.GetReturnValue().Set(Undefined(isolate));
 }
@@ -555,6 +647,58 @@ void SiriDBClient::QueryCb(siridb_req_t * req)
 
     /* cleanup query */
     suv_query_destroy(suvquery);
+
+    /* cleanup connection request */
+    siridb_req_destroy(req);
+}
+
+void SiriDBClient::InsertCb(siridb_req_t * req)
+{
+    Isolate * isolate = Isolate::GetCurrent();
+    v8::HandleScope handleScope(isolate);
+
+    suv_insert_t * suvinsert = (suv_insert_t *) req->data;
+    Work* work = static_cast<Work*>(suvinsert->data);
+    Handle<Value> argv[2];
+
+    if (req->status != 0)
+    {
+        argv[0] = SiriDBClient::BuildErr(
+                isolate,
+                "Unable to handle request: " +
+                std::string(suv_strerror(req->status)));
+        argv[1] = Number::New(isolate, -CprotoErrMsg);
+    }
+    else
+    {
+        try
+        {
+            argv[0] = Unpack(isolate, req->pkg->data, req->pkg->len);
+            argv[1] = Number::New(isolate,
+                    (req->pkg->tp == CprotoReqInsert) ? 0 : -req->pkg->tp);
+        }
+        catch (...)
+        {
+            argv[0] = SiriDBClient::BuildErr(
+                    isolate,
+                    SiriDBClient::GetMsg(req->pkg->tp));
+            argv[1] = Number::New(isolate,
+                    (req->pkg->tp == CprotoReqInsert) ?
+                            -CprotoErrMsg : -req->pkg->tp);
+        }
+
+    }
+
+    Local<Function>::New(isolate, work->cb)->
+          Call(isolate->GetCurrentContext()->Global(), 2, argv);
+
+    work->cb.Reset();
+
+    /* cleanup work */
+    delete work;
+
+    /* cleanup query */
+    suv_insert_destroy(suvinsert);
 
     /* cleanup connection request */
     siridb_req_destroy(req);

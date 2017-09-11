@@ -15,11 +15,15 @@ siridb.connect((err) => {
             console.log('Status: ', status);
             console.log(resp);
                         
-            siridb.close();
         });
         siridb.insert([
             {
-                name: 'my series'
+                type: 'integer',
+                name: 'my series',
+                points: [
+                    [3000, 5.4],
+                    [4000, 7.1]
+                ]
             }], (resp, status) => {
             console.log('Status: ', status);
             console.log(resp);

@@ -195,7 +195,6 @@ static void Pack_(std::string& str, Local<Value>& val)
     }
 }
 
-
 Local<Value> Unpack(
         Isolate * isolate,
         const unsigned char * ptr,

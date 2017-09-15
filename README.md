@@ -67,9 +67,7 @@ siridb.query("select * from /.*series/", (resp, status) => {
 ```
 
 ### Error Codes
-When an error has occurred the `error_msg` in the response contains details about the error.
-Sometimes its useful to act on a specific error, for example you might want to retry the request in case of `ERR_SERVER` while a
-`ERR_INSERT` error indicates something is wrong with the data.
+Sometimes its useful to act on a specific error, for example you might want to retry the request in case of `ERR_SERVER` while a `ERR_INSERT` error indicates something is wrong with the data.
 
 The following error codes can be returned:
 

@@ -1,6 +1,21 @@
 # SiriDB-Node.js-Add-on
 Node.js add-on (C++) for SiriDB
 
+---------------------------------------
+  * [Installation](#installation)
+  * [Quick usage](#quick-usage)
+  * [SiriDBClient](#siridbclient)
+    * [connect](#siridbclient.connect)
+    * [query](#siridbclient.query)
+    * [insert](#siridbclient.insert)
+    * [close](#siridbclient.close)
+  * [Events]
+    * [onClose](#siridbclient.onclose)
+    * [onError](#siridbclient.onerror)
+  * [Error Coder](#error-codes)
+  
+---------------------------------------
+
 ## Installation
 ```
 node-gyp configure && node-gyp build
@@ -22,7 +37,7 @@ siridb.connect((err) => {
 });
 ```
 
-### SiriDBClient Constructor
+## SiriDBClient
 Create a new SiriDB Client. This creates a new client but `connect()` must be used to connect.
 ```javascript
 var siridb = new sdbaddon.SiriDBClient(
@@ -94,7 +109,34 @@ siridb.insert(series, (resp, status) => {
     }
 });
 ```
-### Error Codes
+
+### SiriDBClient.close
+Close the connection.
+```javascript
+siridb.close();
+```
+
+## Events
+### SiriDBClient.onClose
+Will be triggered when the connction is closed or lost. This event will also be triggered when the connection is closed by
+the [close()](#siridbclient.close) function.
+
+```javascript
+siridb.onClose((msg) => {
+    console.log(msg);  // msg is a String
+});
+```
+
+### SiriDBClient.onError
+Will be triggered ***only*** when corrupt or broken data is received on the connection. This is very unlikely to happen but in case something is broken you can use this event to do something, for example close and rebuild the connection.
+
+```javascript
+siridb.onError((msg) => {
+    console.error(msg);  // msg is a String
+});
+```
+
+## Error Codes
 Sometimes its useful to act on a specific error, for example you might want to retry the request in case of `ERR_SERVER` while a `ERR_INSERT` error indicates something is wrong with the data.
 
 The following error codes can be returned:

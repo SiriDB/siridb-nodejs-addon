@@ -3,11 +3,16 @@ const sdbaddon = require('./build/Release/siridb');
 
 var ntest = 2;
 var siridb = new sdbaddon.SiriDBClient(
-    "iris", "siri", "dbtest", "localhost", 9000);
+    "iris",         // database user
+    "siri",         // password
+    "dbtest",       // database name
+    "localhost",    // server address
+    9000            // server port
+);
 
 function test_query(siridb) {
     siridb.query("select * from /.*series/", (resp, status) => {
-        console.log('Query Status: ', status);
+        console.log(`Query Status: ${status}`);
         console.log(resp);
         if (!--ntest) siridb.close();
     });
@@ -29,7 +34,7 @@ function test_insert(siridb) {
             [1505118307, 7]
         ]
     }], (resp, status) => {
-        console.log('Insert Status: ', status);
+        console.log(`Insert Status: ${status}`);
         console.log(resp);
         if (!--ntest) siridb.close();
     });
@@ -41,7 +46,7 @@ siridb.onClose((msg) => {
 
 siridb.connect((err) => {
     if (err) {
-        console.error("Connection error: ", err);
+        console.error(`Connection error: ${err}`);
     } else {
         test_query(siridb);
         test_insert(siridb);

@@ -199,8 +199,20 @@ void SiriDBClient::OnResolved(
 
     if (status < 0)
     {
-        isolate->ThrowException(Exception::TypeError(
-                String::NewFromUtf8(isolate, uv_err_name(status))));
+        v8::HandleScope handleScope(isolate);
+        Handle<Value> argv[1];
+
+        argv[0] = String::NewFromUtf8(isolate, suv_strerror(-status));
+
+
+        Local<Function>::New(isolate, work->cb)->
+              Call(isolate->GetCurrentContext()->Global(), 1, argv);
+
+        work->cb.Reset();
+
+        /* cleanup work */
+        delete work;
+
         uv_freeaddrinfo(res);
         free(resolver);
         return;

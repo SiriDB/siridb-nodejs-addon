@@ -6,12 +6,12 @@ Node.js add-on (C++) for SiriDB
   * [Quick usage](#quick-usage)
   * [SiriDBClient](#siridbclient)
     * [connect](#siridbclientconnect)
-    * [query](#siridbclient-query)
-    * [insert](#siridbclient.insert)
-    * [close](#siridbclient.close)
+    * [query](#siridbclientquery)
+    * [insert](#siridbclientinsert)
+    * [close](#siridbclientclose)
   * [Events](#events)
-    * [onClose](#siridbclient.onclose)
-    * [onError](#siridbclient.onerror)
+    * [onClose](#siridbclientonclose)
+    * [onError](#siridbclientonerror)
   * [Error Coder](#error-codes)
   
 ---------------------------------------

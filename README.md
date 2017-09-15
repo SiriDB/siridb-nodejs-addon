@@ -1,7 +1,26 @@
 # SiriDB-Node.js-Add-on
 Node.js add-on (C++) for SiriDB
 
->WARN: This project is under contruction and not ready for usage.
+## Installation
+```
+node-gyp configure && node-gyp build
+```
+
+## Quick usage
+```javascript
+const sdbaddon = require('./build/Release/siridb');
+
+var siridb = new sdbaddon.SiriDBClient(
+    "iris", "siri", "dbtest", "localhost", 9000);
+
+siridb.connect((err) => {
+    if (err) {
+        console.error(`Connection error: ${err}`);
+    } else {
+        siridb.close();
+    }
+});
+```
 
 ### SiriDBClient Constructor
 Create a new SiriDB Client. This creates a new client but `connect()` must be used to connect.
@@ -17,12 +36,26 @@ var siridb = new sdbaddon.SiriDBClient(
 
 ### SiriDBClient.connect
 Connect to SiriDB. A callback function can be used to check if the connect is successful.
-```javascirpt
+```javascript
 siridb.connect((err) => {
     // successful: err is null
     // error: err is a string with an error message
     if (err) {
         console.error("Connection error: ", err);
+    }
+});
+```
+
+### SiriDBClient.query
+Query SiriDB. Requires a string containing the query and a callback function to capture the result.
+```javascript
+siridb.query("select * from /.*series/", (resp, status) => {
+    // successful: status is 0 and resp containd the returned data
+    // error: status < 0 and resp.error_msg contains a description about the error
+    if (status) {
+        console.error(`Query error: ${resp.error_msg} (${status})`);
+    } else {
+        console.log(resp);  // query data
     }
 });
 ```

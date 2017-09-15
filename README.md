@@ -5,7 +5,7 @@ Node.js add-on (C++) for SiriDB
   * [Installation](#installation)
   * [Quick usage](#quick-usage)
   * [SiriDBClient](#siridbclient)
-    * [connect](#siridbclient-connect)
+    * [connect](#siridbclientconnect)
     * [query](#siridbclient-query)
     * [insert](#siridbclient.insert)
     * [close](#siridbclient.close)

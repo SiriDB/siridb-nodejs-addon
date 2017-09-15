@@ -1,5 +1,5 @@
 // test.js
-const addon = require('./build/Release/addon');
+const addon = require('../build/Release/addon');
 const sleep = require('sleep-async')();
 const RETRY = 5;
 

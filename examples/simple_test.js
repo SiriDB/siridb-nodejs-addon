@@ -1,5 +1,5 @@
 // simple_test.js
-const sdbaddon = require('./build/Release/siridb');
+const sdbaddon = require('../build/Release/siridb');
 
 var ntest = 2;
 var siridb = new sdbaddon.SiriDBClient(

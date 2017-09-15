@@ -38,8 +38,8 @@ var siridb = new sdbaddon.SiriDBClient(
 Connect to SiriDB. A callback function can be used to check if the connect is successful.
 ```javascript
 siridb.connect((err) => {
-    // successful: err is null
-    // error: err is a string with an error message
+    // success: err is null
+    // error:   err is a string with an error message
     if (err) {
         console.error("Connection error: ", err);
     }
@@ -47,17 +47,17 @@ siridb.connect((err) => {
 ```
 
 ### SiriDBClient.query
-Query SiriDB. Requires a string containing the query and a callback function to capture the result.
-The callback returns two arguments: 
- 
+Query SiriDB. Requires a string containing the query and a callback function to catch the result.
+
+The callback function will be called with two arguments:  
  - first argument: A response Object
  - second argument: Number indicating the status. The status is 0 when successful or a negative value in case of an error.
    (see [Error Codes](#error-codes) for the possible status codes)
    
 ```javascript
 siridb.query("select * from /.*series/", (resp, status) => {
-    // successful: status is 0 and resp is an Object containing the data
-    // error:       status < 0 and resp.error_msg contains a description about the error
+    // success: status is 0 and resp is an Object containing the data
+    // error:   status < 0 and resp.error_msg contains a description about the error
     if (status) {
         console.error(`Query error: ${resp.error_msg} (${status})`);
     } else {
@@ -66,6 +66,34 @@ siridb.query("select * from /.*series/", (resp, status) => {
 });
 ```
 
+### SiriDBClient.insert
+Insert time series data into SiriDB. Requires an Array with at least one series Object.string containing the query and a callback function to catch the result.
+
+The callback function will be called with two arguments: 
+ - first argument: A response Object
+ - second argument: Number indicating the status. The status is 0 when successful or a negative value in case of an error.
+   (see [Error Codes](#error-codes) for the possible status codes)
+   
+```javascript
+var series = [{
+    type: 'float',    // float or integer
+    name: 'example',  // name
+    points: [
+        [1505118253, 5.4],
+        [1505118307, 7.1]   // etc.
+    ]
+}];
+
+siridb.insert(series, (resp, status) => {
+    // success: status is 0 and resp.success_msg contains a description about the successful insert
+    // error:   status < 0 and resp.error_msg contains a description about the error
+    if (status) {
+        console.error(`Insert error: ${resp.error_msg} (${status})`);
+    } else {
+        console.log(resp);  // query data
+    }
+});
+```
 ### Error Codes
 Sometimes its useful to act on a specific error, for example you might want to retry the request in case of `ERR_SERVER` while a `ERR_INSERT` error indicates something is wrong with the data.
 

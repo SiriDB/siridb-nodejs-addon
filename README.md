@@ -3,6 +3,29 @@ Node.js add-on (C++) for SiriDB
 
 >WARN: This project is under contruction and not ready for usage.
 
+### SiriDBClient Constructor
+Create a new SiriDB Client. This creates a new client but `connect()` must be used to connect.
+```javascript
+var siridb = new sdbaddon.SiriDBClient(
+    "iris",         // database user
+    "siri",         // password
+    "dbtest",       // database name
+    "localhost",    // server address
+    9000            // server port
+);
+```
+
+### SiriDBClient.connect
+Connect to SiriDB. A callback function can be used to check if the connect is successful.
+```javascirpt
+siridb.connect((err) => {
+    // successful: err is null
+    // error: err is a string with an error message
+    if (err) {
+        console.error("Connection error: ", err);
+    }
+});
+```
 
 ### Error Codes
 When an error has occurred the `error_msg` in the response contains details about the error.

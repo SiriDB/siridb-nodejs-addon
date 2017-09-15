@@ -119,7 +119,7 @@ siridb.close();
 ## Events
 ### SiriDBClient.onClose
 Will be triggered when the connction is closed or lost. This event will also be triggered when the connection is closed by
-the [close()](#siridbclient.close) function.
+the [close()](#siridbclientclose) function.
 
 ```javascript
 siridb.onClose((msg) => {

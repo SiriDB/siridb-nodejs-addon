@@ -12,7 +12,8 @@ Node.js add-on (C++) for SiriDB
   * [Events](#events)
     * [onClose](#siridbclientonclose)
     * [onError](#siridbclientonerror)
-  * [Error Coder](#error-codes)
+  * [Status codes](#status-codes)
+  * [Version info](#version-info)
   
 ---------------------------------------
 
@@ -67,7 +68,7 @@ Query SiriDB. Requires a string containing the query and a callback function to 
 The callback function will be called with two arguments:  
  - first argument: A response Object
  - second argument: Number indicating the status. The status is 0 when successful or a negative value in case of an error.
-   (see [Error Codes](#error-codes) for the possible status codes)
+   (see [Status codes](#status-codes) for the possible status codes)
    
 ```javascript
 siridb.query("select * from /.*series/", (resp, status) => {
@@ -87,7 +88,7 @@ Insert time series data into SiriDB. Requires an Array with at least one series 
 The callback function will be called with two arguments: 
  - first argument: A response Object
  - second argument: Number indicating the status. The status is 0 when successful or a negative value in case of an error.
-   (see [Error Codes](#error-codes) for the possible status codes)
+   (see [Status codes](#status-codes) for the possible status codes)
    
 ```javascript
 var series = [{
@@ -136,12 +137,12 @@ siridb.onError((msg) => {
 });
 ```
 
-## Error Codes
+## Status codes
 Sometimes its useful to act on a specific error, for example you might want to retry the request in case of `ERR_SERVER` while a `ERR_INSERT` error indicates something is wrong with the data.
 
-The following error codes can be returned:
+The following status codes can be returned:
 
-- `sdbaddon.ERR_MSG` (-64) *General error code*
+- `sdbaddon.ERR_MSG` (-64) *General error*
 - `sdbaddon.ERR_QUERY` (-65) *Most likely a syntax error in the query*
 - `sdbaddon.ERR_INSERT` (-66) *Most likely the data is invalid or corrupt*
 - `sdbaddon.ERR_SERVER` (-67) *The server could not perform the request, you could try another SiriDB server*
@@ -152,3 +153,6 @@ The following error codes can be returned:
 - `sdbaddon.ERR_CREDENTIALS` (-72) *Credentials are invalid*
 - `sdbaddon.ERR_UNKNOWN_DB` (-73) *Trying to authenticate to an unknown database*
 - `sdbaddon.ERR_LOADING_DB` (-74) *The database is loading*
+
+## Version info
+Use `sdbaddon.VERSION` for version information.

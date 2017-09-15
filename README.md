@@ -94,7 +94,7 @@ The callback function will be called with two arguments:
 var series = [{
     type: 'float',    // float or integer
     name: 'example',  // name
-    points: [         // array or points
+    points: [         // array with points
         [1505118253, 5.4],  // time-stamp, value
         [1505118307, 7.1]   // etc.
     ]

@@ -106,7 +106,7 @@ siridb.insert(series, (resp, status) => {
     if (status) {
         console.error(`Insert error: ${resp.error_msg} (${status})`);
     } else {
-        console.log(resp);  // query data
+        console.log(resp.success_msg);  // insert message
     }
 });
 ```

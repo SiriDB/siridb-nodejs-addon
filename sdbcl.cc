@@ -7,6 +7,8 @@
 #include "sdbcl.h"
 #include "v8qpack.h"
 
+#define VERSION "0.0.1"
+
 namespace siridb
 {
 
@@ -88,6 +90,9 @@ void SiriDBClient::Init(Local<Object> exports)
 
     Local<Context> context = isolate->GetCurrentContext();
 
+    exports->DefineOwnProperty(context,
+        String::NewFromUtf8(isolate, "VERSION"),
+        String::NewFromUtf8(isolate, VERSION), v8::ReadOnly);
     exports->DefineOwnProperty(context,
         String::NewFromUtf8(isolate, "ERR_MSG"),
         Number::New(isolate, -64), v8::ReadOnly);

@@ -40,8 +40,13 @@ private:
     static void InsertCb(siridb_req_t * req);
     static void OnCloseCb(void * buf_data, const char * msg);
     static void OnErrorCb(void * buf_data, const char * msg);
+    static void OnResolved(
+            uv_getaddrinfo_t * resolver,
+            int status,
+            struct addrinfo * res);
     static v8::Local<v8::Object> BuildErr(
-            v8::Isolate * isolate, std::string err);
+            v8::Isolate * isolate,
+            std::string err);
     static std::string GetMsg(uint8_t tp);
     static v8::Persistent<v8::Function> constructor;
     const std::string username_;

@@ -2,6 +2,7 @@
 #include <iostream>
 #include <string.h>
 #include <stdlib.h>
+#include <arpa/inet.h>
 #include <vector>
 #include "sdbcl.h"
 #include "v8qpack.h"
@@ -186,16 +187,64 @@ void SiriDBClient::New(const FunctionCallbackInfo<Value>& args)
     }
 }
 
+void SiriDBClient::OnResolved(
+        uv_getaddrinfo_t * resolver,
+        int status,
+        struct addrinfo * res)
+{
+    Isolate * isolate = Isolate::GetCurrent();
+    std::bad_alloc allocexc;
+    Work * work = static_cast<Work*>(resolver->data);
+    uv_loop_t * loop = uv_default_loop();
+
+    if (status < 0)
+    {
+        isolate->ThrowException(Exception::TypeError(
+                String::NewFromUtf8(isolate, uv_err_name(status))));
+        uv_freeaddrinfo(res);
+        free(resolver);
+        return;
+    }
+
+    siridb_req_t * req = siridb_req_create(
+            work->siridb->siridb_,
+            ConnectCb,
+            NULL);
+    if (!req) throw allocexc;
+
+    suv_connect_t * conn = suv_connect_create(
+            req,
+            work->siridb->username_.c_str(),
+            work->siridb->password_.c_str(),
+            work->siridb->dbname_.c_str());
+    if (!conn) throw allocexc;
+
+    conn->data = work;
+    req->data = conn;
+
+    suv_connect(
+            loop,
+            conn,
+            work->siridb->buf_,
+            (struct sockaddr *) res->ai_addr);
+
+    uv_freeaddrinfo(res);
+    free(resolver);
+}
+
 void SiriDBClient::Connect(const FunctionCallbackInfo<Value>& args)
 {
-    struct sockaddr_in addr;
-    Isolate* isolate = args.GetIsolate();
+    struct sockaddr * addr;
+    struct in_addr sa;
+    struct in6_addr sa6;
+    struct sockaddr_in dest;
+    struct sockaddr_in6 dest6;
+    Isolate * isolate = args.GetIsolate();
     SiriDBClient * obj = ObjectWrap::Unwrap<SiriDBClient>(args.Holder());
     uv_loop_t * loop = uv_default_loop();
     Local<Function> cb = Local<Function>::Cast(args[0]);
-    Work* work;
+    Work * work;
     std::bad_alloc allocexc;
-    int rc;
 
     if (!obj->siridb_ || !obj->buf_)
     {
@@ -204,14 +253,49 @@ void SiriDBClient::Connect(const FunctionCallbackInfo<Value>& args)
         return;
     }
 
-    rc = uv_ip4_addr(obj->host_.c_str(), obj->port_, &addr);
+    work = new Work();
+    work->cb.Reset(isolate, cb);
+    work->siridb = obj;
 
-    if (rc != 0)
+    if (inet_pton(AF_INET, obj->host_.c_str(), &sa))
     {
-        isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(
-                isolate,
-                ("Cannot initialize IPv4 address: " +
-                        std::string(uv_strerror(rc))).c_str())));
+        /* IPv4 */
+        uv_ip4_addr(obj->host_.c_str(), obj->port_, &dest);
+        addr = (struct sockaddr *) &dest;
+    }
+    else if (inet_pton(AF_INET6, obj->host_.c_str(), &sa6))
+    {
+        /* IPv6 */
+        uv_ip6_addr(obj->host_.c_str(), obj->port_, &dest6);
+        addr = (struct sockaddr *) &dest6;
+    }
+    else
+    {
+        struct addrinfo hints;
+        hints.ai_family = AF_UNSPEC;
+        hints.ai_socktype = SOCK_STREAM;
+        hints.ai_protocol = IPPROTO_TCP;
+        hints.ai_flags = AI_NUMERICSERV;
+
+        uv_getaddrinfo_t * resolver =
+                (uv_getaddrinfo_t *) malloc(sizeof(uv_getaddrinfo_t));
+        if (!resolver) throw allocexc;
+        resolver->data = work;
+
+        char port[6]= {'\0'};
+        sprintf(port, "%u", obj->port_);
+
+        int result = uv_getaddrinfo(
+                loop,
+                resolver,
+                SiriDBClient::OnResolved,
+                obj->host_.c_str(),
+                port,
+                &hints);
+        if (result) throw allocexc;
+
+        args.GetReturnValue().Set(Undefined(isolate));
+        return;
     }
 
     siridb_req_t * req = siridb_req_create(obj->siridb_, ConnectCb, NULL);
@@ -224,21 +308,17 @@ void SiriDBClient::Connect(const FunctionCallbackInfo<Value>& args)
             obj->dbname_.c_str());
     if (!conn) throw allocexc;
 
-    work = new Work();
-    work->cb.Reset(isolate, cb);
-    work->siridb = obj;
-
     conn->data = work;
     req->data = conn;
 
-    suv_connect(loop, conn, obj->buf_, (struct sockaddr *) &addr);
+    suv_connect(loop, conn, obj->buf_, (struct sockaddr *) addr);
 
     args.GetReturnValue().Set(Undefined(isolate));
 }
 
 void SiriDBClient::SetCloseCb(const FunctionCallbackInfo<Value>& args)
 {
-    Isolate* isolate = args.GetIsolate();
+    Isolate * isolate = args.GetIsolate();
     SiriDBClient* obj = ObjectWrap::Unwrap<SiriDBClient>(args.Holder());
     Local<Function> cb = Local<Function>::Cast(args[0]);
 
@@ -249,8 +329,8 @@ void SiriDBClient::SetCloseCb(const FunctionCallbackInfo<Value>& args)
 
 void SiriDBClient::SetErrorCb(const FunctionCallbackInfo<Value>& args)
 {
-    Isolate* isolate = args.GetIsolate();
-    SiriDBClient* obj = ObjectWrap::Unwrap<SiriDBClient>(args.Holder());
+    Isolate * isolate = args.GetIsolate();
+    SiriDBClient * obj = ObjectWrap::Unwrap<SiriDBClient>(args.Holder());
     Local<Function> cb = Local<Function>::Cast(args[0]);
 
     obj->onerrorcb_.Reset(isolate, cb);
@@ -270,10 +350,10 @@ void SiriDBClient::Close(const FunctionCallbackInfo<Value>& args)
 
 void SiriDBClient::Query(const FunctionCallbackInfo<Value>& args)
 {
-    Isolate* isolate = args.GetIsolate();
-    SiriDBClient* obj = ObjectWrap::Unwrap<SiriDBClient>(args.Holder());
+    Isolate * isolate = args.GetIsolate();
+    SiriDBClient * obj = ObjectWrap::Unwrap<SiriDBClient>(args.Holder());
     Local<Function> cb;
-    Work* work;
+    Work * work;
     std::bad_alloc allocexc;
 
     if (!obj->siridb_ || !obj->buf_)
@@ -330,10 +410,10 @@ void SiriDBClient::Query(const FunctionCallbackInfo<Value>& args)
 
 void SiriDBClient::Insert(const FunctionCallbackInfo<Value>& args)
 {
-    Isolate* isolate = args.GetIsolate();
-    SiriDBClient* obj = ObjectWrap::Unwrap<SiriDBClient>(args.Holder());
+    Isolate * isolate = args.GetIsolate();
+    SiriDBClient * obj = ObjectWrap::Unwrap<SiriDBClient>(args.Holder());
     Local<Function> cb;
-    Work* work;
+    Work * work;
     std::bad_alloc allocexc;
 
     if (!obj->siridb_ || !obj->buf_)

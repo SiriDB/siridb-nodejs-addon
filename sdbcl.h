@@ -1,4 +1,9 @@
-// sdbcl.h
+/*
+ * sdbcl.h
+ *
+ *  Created on: Sep 15, 2017
+ *      Author: Jeroen van der Heijden <jeroen@transceptor.technology>
+ */
 #ifndef SDBCL_H
 #define SDBCL_H
 

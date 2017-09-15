@@ -1,3 +1,9 @@
+/*
+ * v8qpack.cc
+ *
+ *  Created on: Sep 15, 2017
+ *      Author: Jeroen van der Heijden <jeroen@transceptor.technology>
+ */
 #include <string.h>
 #include "v8qpack.h"
 

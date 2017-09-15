@@ -1,4 +1,9 @@
-// addon.cc
+/*
+ * addon.cc
+ *
+ *  Created on: Sep 15, 2017
+ *      Author: Jeroen van der Heijden <jeroen@transceptor.technology>
+ */
 #include <node.h>
 #include <libsiridb/siridb.h>
 #include "sdbcl.h"

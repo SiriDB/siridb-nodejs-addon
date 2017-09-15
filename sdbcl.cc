@@ -1,4 +1,9 @@
-// sdbcl.cc
+/*
+ * sdbcl.cc
+ *
+ *  Created on: Sep 15, 2017
+ *      Author: Jeroen van der Heijden <jeroen@transceptor.technology>
+ */
 #include <iostream>
 #include <string.h>
 #include <stdlib.h>

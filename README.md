@@ -48,10 +48,16 @@ siridb.connect((err) => {
 
 ### SiriDBClient.query
 Query SiriDB. Requires a string containing the query and a callback function to capture the result.
+The callback returns two arguments: 
+ 
+ - first argument: A response Object
+ - second argument: Number indicating the status. The status is 0 when successful or a negative value in case of an error.
+   (see [Error Codes](#error-codes) for the possible status codes)
+   
 ```javascript
 siridb.query("select * from /.*series/", (resp, status) => {
-    // successful: status is 0 and resp containd the returned data
-    // error: status < 0 and resp.error_msg contains a description about the error
+    // successful: status is 0 and resp is an Object containing the data
+    // error:       status < 0 and resp.error_msg contains a description about the error
     if (status) {
         console.error(`Query error: ${resp.error_msg} (${status})`);
     } else {

@@ -1,5 +1,5 @@
 # SiriDB-Node.js-Add-on
-Node.js add-on (C++) for [SiriDB](https://github.com/transceptor-technology/siridb-server#readme)
+Node.js add-on (C++) for [SiriDB](https://github.com/SiriDB/siridb-server#readme)
 
 ---------------------------------------
   * [Installation](#installation)

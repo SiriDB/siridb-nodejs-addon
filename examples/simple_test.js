@@ -18,7 +18,7 @@ function test_query(siridb) {
     });
 }
 
-function test_insert(siridb) {    
+function test_insert(siridb) {
     siridb.insert([{
         type: 'float',
         name: 'some float series',
@@ -32,6 +32,13 @@ function test_insert(siridb) {
         points: [
             [1505118253, 5],
             [1505118307, 7]
+        ]
+    }, {
+        type: 'string',
+        name: 'some string series',
+        points: [
+            [1505118253, 'Hello, what database is this?'],
+            [1505118307, 'SiriDB!']
         ]
     }], (resp, status) => {
         console.log(`Insert Status: ${status}`);

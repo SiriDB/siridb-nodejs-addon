@@ -29,7 +29,7 @@ const sdbaddon = require('./build/Release/siridb');
 var siridb = new sdbaddon.SiriDBClient(
     "iris", "siri", "dbtest", "localhost", 9000);
 
-siridb.connect((err) => {
+siridb.connect(err => {
     if (err) {
         console.error(`Connection error: ${err}`);
     } else {
@@ -53,7 +53,7 @@ var siridb = new sdbaddon.SiriDBClient(
 ### SiriDBClient.connect
 Connect to SiriDB. A callback function can be used to check if the connect is successful.
 ```javascript
-siridb.connect((err) => {
+siridb.connect(err => {
     // success: err is null
     // error:   err is a string with an error message
     if (err) {
@@ -123,7 +123,7 @@ Will be triggered when the connction is closed or lost. This event will also be 
 the [close()](#siridbclientclose) function.
 
 ```javascript
-siridb.onClose((msg) => {
+siridb.onClose(msg => {
     console.log(msg);  // msg is a String
 });
 ```
@@ -132,7 +132,7 @@ siridb.onClose((msg) => {
 Will be triggered ***only*** when corrupt or broken data is received on the connection. This is very unlikely to happen but in case something is broken you can use this event to do something, for example close and rebuild the connection.
 
 ```javascript
-siridb.onError((msg) => {
+siridb.onError(msg => {
     console.error(msg);  // msg is a String
 });
 ```

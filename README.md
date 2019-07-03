@@ -19,12 +19,36 @@ Node.js add-on (C++) for [SiriDB](https://github.com/SiriDB/siridb-server#readme
 
 ## Installation
 ```
-node-gyp configure && node-gyp build
+mkdir my_modules
+cd my_modules
+git clone https://github.com/SiriDB/siridb-nodejs-addon.git siridb
+cd ../
+npm install ./my_modules/siridb
 ```
+
+### About Installation
+
+The addon is built using `cmake` and `node-gyp`.
+
+
+The dependencies are:
+
+* https://github.com/transceptor-technology/libqpack.git
+* https://github.com/SiriDB/libsiridb.git
+* https://github.com/SiriDB/libsuv.git
+
+The build command is: `node-gyp configure && node-gyp build`
+
+There is `install.sh` script that will install everything, when the package is installed using npm.
+It's possible to do the compilation manually, like in install.sh.
+
+The main module file is specified in package.json:
+
+  `"main": "build/Release/obj.target/siridb.node"`
 
 ## Quick usage
 ```javascript
-const sdbaddon = require('./build/Release/siridb');
+const sdbaddon = require('siridb');
 
 var siridb = new sdbaddon.SiriDBClient(
     "iris", "siri", "dbtest", "localhost", 9000);

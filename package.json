@@ -1,0 +1,24 @@
+{
+  "name": "siridb",
+  "version": "1.0.0",
+  "description": "Node.js add-on (C++) for [SiriDB](https://github.com/SiriDB/siridb-server#readme)",
+  "main": "build/Release/obj.target/siridb.node",
+  "directories": {
+    "example": "examples"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "install": "bash install.sh"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SiriDB/siridb-nodejs-addon.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "gypfile": true,
+  "bugs": {
+    "url": "https://github.com/SiriDB/siridb-nodejs-addon/issues"
+  },
+  "homepage": "https://github.com/SiriDB/siridb-nodejs-addon#readme"
+}
